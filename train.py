@@ -129,9 +129,27 @@ def main():
     if os.path.exists(restore_from):
         print('Resume training from {}'.format(restore_from))
         checkpoint = torch.load(restore_from, map_location='cpu')
+
+        ###########################################################
+        #Load checkpoint & Fit model parameters
+        new_params = model.state_dict().copy()
+
+        model_keys = [name for name, _ in model.named_parameters()]
+        weight_file = [i for i in checkpoint['state_dict']]      
+
+        for i in weight_file:
+            if i not in model_keys: continue
+            if 'module' in i:
+                wo_i = i[7:]
+            new_params[wo_i] = checkpoint[i]
+
+        checkpoint['state_dict'] = new_params
+        ###########################################################
+
         model.load_state_dict(checkpoint['state_dict'])
         start_epoch = checkpoint['epoch']
     model.to(device)
+    
     if args.syncbn:
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = DDP(model, device_ids=[local_rank], output_device=local_rank, find_unused_parameters=True)
