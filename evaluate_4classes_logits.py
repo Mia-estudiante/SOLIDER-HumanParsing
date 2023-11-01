@@ -80,25 +80,25 @@ def get_arguments():
 
 def get_palette_4classes():
     palette = [0,0,0,   #Background
-            0,0,0,      #Hat
-            0,0,0,      #Hair
-            0,0,0,      #Glove
-            0,0,0,      #Sunglasses
-            0,128,0,    #Upper-clothes
+              0,0,0,    #Hat
+            0,0,0,    #Hair
+            0,0,0,     #Glove
+            0,0,0,   #Sunglasses
+            0, 128, 0,   #Upper-clothes
             0,0,85,     #Dress
-            0,128,0,    #Coat
-            0,0,0,      #Socks
-            128,0,0,    #Pants
-            0,0,85,     #Jumpsuits
-            0,0,0,      #Scarf
-            128,0,0,    #Skirt
-            0,0,0,      #Face
-            0,0,0,      #Left-arm
-            0,0,0,      #Right-arm
-            0,0,0,      #Left-leg
-            0,0,0,      #Right-leg
-            0,0,0,      #Left-shoe
-            0,0,0]      #Right-shoe
+            0, 128, 0,  #Coat
+            0,0,0,    #Socks
+            128, 0, 0,    #Pants
+            0,0,85,    #Jumpsuits
+            0,0,0,  #Scarf
+            128, 0, 0,    #Skirt
+            0,0,0,    #Face
+            0,0,0, #Left-arm
+            0,0,0,  #Right-arm
+            0,0,0, #Left-leg
+            0,0,0, #Right-leg
+            0,0,0,  #Left-shoe
+            0,0,0]  #Right-shoe
     return palette  
 
 def get_palette(num_cls):
@@ -138,25 +138,62 @@ def multi_scale_testing(model, batch_input_im, crop_size=[473, 473], flip=True, 
         interp_im = torch.nn.Upsample(scale_factor=s, mode='bilinear', align_corners=True)
         scaled_im = interp_im(batch_input_im)
         parsing_output = model(scaled_im)
+
         parsing_output = parsing_output[0][-1] # torch.Size([1, 20, 72, 48]) - [[parsing_result, fusion_result], [edge_result]] -> fusion result
-        output = parsing_output[0]             # torch.Size([20, 72, 48])
+        output = parsing_output[0]             # torch.Size([20, 72, 48]) -> fusion_result
         if flip:
             flipped_output = parsing_output[1]
             flipped_output[14:20, :, :] = flipped_output[flipped_idx, :, :]
             output += flipped_output.flip(dims=[-1])
             output *= 0.5
         output = interp(output.unsqueeze(0))
-        ms_outputs.append(output[0])                            # torch.Size([20, 72, 48])
-    ms_fused_parsing_output = torch.stack(ms_outputs)           #torch.Size([5, 20, 572, 384])
-    ms_fused_parsing_output = ms_fused_parsing_output.mean(0)   #torch.Size([20, 572, 384])
+        ms_outputs.append(output[0])                                    # torch.Size([20, 72, 48])
+    ms_fused_parsing_output = torch.stack(ms_outputs)                   # torch.Size([5, 20, 572, 384])
+    ms_fused_parsing_output = ms_fused_parsing_output.mean(0)           # torch.Size([20, 572, 384])
     ms_fused_parsing_output = ms_fused_parsing_output.permute(1, 2, 0)  # HWC - permute 후, torch.Size([572, 384, 20])
-    parsing = torch.argmax(ms_fused_parsing_output, dim=2)      #torch.Size([572, 384])
+    parsing = torch.argmax(ms_fused_parsing_output, dim=2)              # torch.Size([572, 384])
 
     parsing = parsing.data.cpu().numpy()
     ms_fused_parsing_output = ms_fused_parsing_output.data.cpu().numpy()
 
     return parsing, ms_fused_parsing_output #, list(model.parameters())[-2].data.cpu().numpy()
 
+######################################################################################################
+#wanna analyze the model outputs
+def multi_scale_testing_me(model, batch_input_im, crop_size=[473, 473], flip=True, multi_scales=[1]):
+    flipped_idx = (15, 14, 17, 16, 19, 18)
+    if len(batch_input_im.shape) > 4:
+        batch_input_im = batch_input_im.squeeze()
+    if len(batch_input_im.shape) == 3:
+        batch_input_im = batch_input_im.unsqueeze(0)
+
+    interp = torch.nn.Upsample(size=crop_size, mode='bilinear', align_corners=True)
+    ms_outputs = []
+    for s in multi_scales:
+        interp_im = torch.nn.Upsample(scale_factor=s, mode='bilinear', align_corners=True)
+        # scaled_im = interp_im(batch_input_im)
+        scaled_im = batch_input_im
+        parsing_output = model(scaled_im) 
+        parsing_output = parsing_output[0][-1] #[4,20,72,48] vs [4,20,143,96]
+        # output = parsing_output[0]
+        output = parsing_output
+        if flip:
+            flipped_output = parsing_output[1]
+            flipped_output[14:20, :, :] = flipped_output[flipped_idx, :, :]
+            output += flipped_output.flip(dims=[-1])
+            output *= 0.5
+        # output = interp(output.unsqueeze(0))
+        output = interp(output)
+        # ms_outputs.append(output[0])
+        ms_outputs.append(output)
+    ms_fused_parsing_output = torch.stack(ms_outputs)
+    ms_fused_parsing_output = ms_fused_parsing_output.mean(0)
+    ms_fused_parsing_output = ms_fused_parsing_output.permute(1, 2, 0)  # HWC
+    parsing = torch.argmax(ms_fused_parsing_output, dim=2)
+    parsing = parsing.data.cpu().numpy()
+    ms_fused_parsing_output = ms_fused_parsing_output.data.cpu().numpy()
+    return parsing, ms_fused_parsing_output
+######################################################################################################
 
 def main():
     """Create the model and start the evaluation process."""
@@ -187,7 +224,6 @@ def main():
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGE_MEAN,
                                  std=IMAGE_STD),
-
         ])
     if INPUT_SPACE == 'RGB':
         print('RGB Transformation')
@@ -214,21 +250,19 @@ def main():
     model.load_state_dict(new_state_dict)
     model.cuda()
     model.eval()
-
-    sp_results_dir = os.path.join(args.results_dir, args.model_name)
+    sp_results_dir = os.path.join(args.results_dir, args.data_name)
     if not os.path.exists(sp_results_dir):
         os.makedirs(sp_results_dir)
 
     # palette = get_palette(20)
-    palette = get_palette_4classes() #integrate classes
+    palette = get_palette_4classes()
     parsing_preds = []
     scales = np.zeros((num_samples, 2), dtype=np.float32)
     centers = np.zeros((num_samples, 2), dtype=np.int32)
 
-    #Set variables for making activation maps
     ##############################################################################
-    # images_name = []
-    # npy_logits = np.empty((572, 384, 20))
+    images_name = []
+    npy_logits = np.empty((572, 384, 20))
     ##############################################################################
 
     with torch.no_grad():
@@ -237,6 +271,7 @@ def main():
             if (len(image.shape) > 4):
                 image = image.squeeze()
             im_name = meta['name'][0]
+            images_name.append(im_name)
             c = meta['center'].numpy()[0]
             s = meta['scale'].numpy()[0]
             w = meta['width'].numpy()[0]
@@ -246,26 +281,36 @@ def main():
 
             parsing, _ = multi_scale_testing(model, image.cuda(), crop_size=input_size, flip=args.flip,
                                                   multi_scales=multi_scales)
-            
-            #Stack logits
+
+        #Stack logits    
+        ##############################################################################
             if (npy_logits==0).all():
                 npy_logits = _.copy()
-            else:
+            if npy_logits.ndim==3:
                 npy_logits= np.stack([npy_logits, _], axis=0)
-
+            else:
+                npy_logits = np.concatenate([npy_logits, _[None, ...]], axis=0)
+        ##############################################################################
+            
             if args.save_results:
                 parsing_result = transform_parsing(parsing, c, s, w, h, input_size)
                 parsing_result_path = os.path.join(sp_results_dir, im_name + '.png')
                 output_im = PILImage.fromarray(np.asarray(parsing_result, dtype=np.uint8))
                 output_im.putpalette(palette)
                 output_im.save(parsing_result_path)
-            
-            parsing_preds.append(parsing)
+
+        #Save logit and image_names
+        ############################################################################
+        np.save(os.path.join(sp_results_dir, "activate_logits.npy"), npy_logits)
+        with open(os.path.join(sp_results_dir, "image_names.txt"), 'w+') as file:
+            file.write('\n'.join(images_name))
+        ############################################################################
 
     assert len(parsing_preds) == num_samples
     mIoU = compute_mean_ioU_4classes(parsing_preds, scales, centers, len(LIP), args.data_dir, input_size)
     print(mIoU)
     return
+
 
 if __name__ == '__main__':
     main()
