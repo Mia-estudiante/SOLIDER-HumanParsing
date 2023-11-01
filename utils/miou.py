@@ -10,8 +10,7 @@ LABELS = ['Background', 'Hat', 'Hair', 'Glove', 'Sunglasses', 'Upper-clothes', '
           'Socks', 'Pants', 'Jumpsuits', 'Scarf', 'Skirt', 'Face', 'Left-arm', 'Right-arm', 'Left-leg',
           'Right-leg', 'Left-shoe', 'Right-shoe']
 
-
-# LABELS = ['Background', 'Head', 'Torso', 'Upper Arms', 'Lower Arms', 'Upper Legs', 'Lower Legs']
+LIP = ['Background', 'bottom', 'upper', 'dress']
 
 def get_palette(num_cls):
     """ Returns the color map for visualizing the segmentation mask.
@@ -57,7 +56,6 @@ def get_confusion_matrix(gt_label, pred_label, num_classes):
                 confusion_matrix[i_label, i_pred_label] = label_count[cur_index]
 
     return confusion_matrix
-
 
 def compute_mean_ioU(preds, scales, centers, num_classes, datadir, input_size=[473, 473], dataset='val'):
     val_file = os.path.join(datadir, dataset + '_id.txt')
@@ -107,6 +105,86 @@ def compute_mean_ioU(preds, scales, centers, num_classes, datadir, input_size=[4
     name_value = OrderedDict(name_value)
     return name_value
 
+###################################################################################
+
+#Map pixels related to classes
+def make_dicmap(data):
+    # dic2clt = {'upper':2, 'bottom':1, 'dress':3}
+    # dic2clt = {'upper':3, 'bottom':5, 'dress':200} #DukeMTMC
+    dic2clt = {'upper':1, 'bottom':2, 'dress':3} #LIP
+
+    dic_parset = {
+        'ppss': {'upper':[3], 'bottom':[4]},  
+        'LIP': {'upper':[5,7], 'bottom':[9,12], 'dress':[6,10]},  
+        'MHP_v2': {'upper':[10,11,12,13,14,15,34,57],  
+                'bottom':[17,18,19,58],  
+                'dress':[35,36,37,38]},  
+        'Duke': {'upper':[3], 'bottom':[5]},  
+        'HPD': {'upper':[4,5], 'bottom':[6], 'dress':[7]}
+        }
+
+    dic_map = {v: dic2clt[key] for key, value in dic_parset[data].items() for v in value}
+    return dic_map
+
+def compute_mean_ioU_4classes(preds, scales, centers, num_classes, datadir, input_size=[473, 473], dataset='val', datatype='LIP'):
+    val_file = os.path.join(datadir, dataset + '_id.txt')
+    val_id = [i_id.strip() for i_id in open(val_file)]
+    dic_map = make_dicmap(datatype)
+
+    confusion_matrix = np.zeros((num_classes, num_classes))
+
+    for i, pred_out in enumerate(preds):
+        im_name = val_id[i]
+        gt_path = os.path.join(datadir, dataset + '_segmentations', im_name + '.png')
+        gt = np.array(PILImage.open(gt_path))
+        h, w = gt.shape
+        s = scales[i]
+        c = centers[i]
+        pred = transform_parsing(pred_out, c, s, w, h, input_size)
+
+        gt = np.asarray(gt, dtype=np.int32)
+        pred = np.asarray(pred, dtype=np.int32)
+        
+        ignore_index = gt != 255
+        gt = gt[ignore_index]
+        pred = pred[ignore_index]
+
+        # seg_gt = PILImage.open(seg_gt_path).resize(dsize[::-1])
+        # seg_pred = PILImage.open(seg_pred_path).resize(dsize[::-1])
+
+        gt = PILImage.fromarray(gt)
+        pred = PILImage.fromarray(pred)
+
+        seg_gt2 = gt.point(lambda p: dic_map.get(p, 0))
+        seg_pred2 = pred.point(lambda p: dic_map.get(p, 0))
+        
+        # confusion_matrix += get_confusion_matrix(gt, pred, num_classes)
+        confusion_matrix += get_confusion_matrix(np.array(seg_gt2), np.array(seg_pred2), num_classes)    #gt, pred, num_classes
+
+    pos = confusion_matrix.sum(1)
+    res = confusion_matrix.sum(0)
+    tp = np.diag(confusion_matrix)
+
+    pixel_accuracy = (tp.sum() / pos.sum()) * 100
+    mean_accuracy = ((tp / np.maximum(1.0, pos)).mean()) * 100
+    IoU_array = (tp / np.maximum(1.0, pos + res - tp))
+    IoU_array = IoU_array * 100
+    mean_IoU = IoU_array.mean()
+    print('Pixel accuracy: %f \n' % pixel_accuracy)
+    print('Mean accuracy: %f \n' % mean_accuracy)
+    print('Mean IU: %f \n' % mean_IoU)
+    name_value = []
+
+    for i, (label, iou) in enumerate(zip(LIP, IoU_array)):
+        name_value.append((label, iou))
+
+    name_value.append(('Pixel accuracy', pixel_accuracy))
+    name_value.append(('Mean accuracy', mean_accuracy))
+    name_value.append(('Mean IU', mean_IoU))
+    name_value = OrderedDict(name_value)
+    return name_value
+
+###################################################################################
 
 def compute_mean_ioU_file(preds_dir, num_classes, datadir, dataset='val'):
     list_path = os.path.join(datadir, dataset + '_id.txt')
