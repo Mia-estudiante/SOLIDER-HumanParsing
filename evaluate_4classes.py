@@ -187,7 +187,6 @@ def main():
             transforms.ToTensor(),
             transforms.Normalize(mean=IMAGE_MEAN,
                                  std=IMAGE_STD),
-
         ])
     if INPUT_SPACE == 'RGB':
         print('RGB Transformation')
@@ -248,10 +247,10 @@ def main():
                                                   multi_scales=multi_scales)
             
             #Stack logits
-            if (npy_logits==0).all():
-                npy_logits = _.copy()
-            else:
-                npy_logits= np.stack([npy_logits, _], axis=0)
+            # if (npy_logits==0).all():
+            #     npy_logits = _.copy()
+            # else:
+            #     npy_logits= np.stack([npy_logits, _], axis=0)
 
             if args.save_results:
                 parsing_result = transform_parsing(parsing, c, s, w, h, input_size)
