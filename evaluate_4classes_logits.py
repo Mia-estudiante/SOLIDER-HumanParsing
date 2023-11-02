@@ -80,26 +80,26 @@ def get_arguments():
 
 def get_palette_4classes():
     palette = [0,0,0,   #Background
-              0,0,0,    #Hat
-            0,0,0,    #Hair
-            0,0,0,     #Glove
-            0,0,0,   #Sunglasses
-            0, 128, 0,   #Upper-clothes
+            0,0,0,      #Hat
+            0,0,0,      #Hair
+            0,0,0,      #Glove
+            0,0,0,      #Sunglasses
+            0,128,0,    #Upper-clothes
             0,0,85,     #Dress
-            0, 128, 0,  #Coat
-            0,0,0,    #Socks
-            128, 0, 0,    #Pants
-            0,0,85,    #Jumpsuits
-            0,0,0,  #Scarf
-            128, 0, 0,    #Skirt
-            0,0,0,    #Face
-            0,0,0, #Left-arm
-            0,0,0,  #Right-arm
-            0,0,0, #Left-leg
-            0,0,0, #Right-leg
-            0,0,0,  #Left-shoe
-            0,0,0]  #Right-shoe
-    return palette  
+            0,128,0,    #Coat
+            0,0,0,      #Socks
+            128,0,0,    #Pants
+            0,0,85,     #Jumpsuits
+            0,0,0,      #Scarf
+            128,0,0,    #Skirt
+            0,0,0,      #Face
+            0,0,0,      #Left-arm
+            0,0,0,      #Right-arm
+            0,0,0,      #Left-leg
+            0,0,0,      #Right-leg
+            0,0,0,      #Left-shoe
+            0,0,0]      #Right-shoe
+    return palette
 
 def get_palette(num_cls):
     """ Returns the color map for visualizing the segmentation mask.
@@ -299,18 +299,19 @@ def main():
                 output_im.putpalette(palette)
                 output_im.save(parsing_result_path)
 
-        #Save logit and image_names
+            parsing_preds.append(parsing)
+
+        #Save logits and image_names
         ############################################################################
         np.save(os.path.join(sp_results_dir, "activate_logits.npy"), npy_logits)
         with open(os.path.join(sp_results_dir, "image_names.txt"), 'w+') as file:
             file.write('\n'.join(images_name))
         ############################################################################
-
+            
     assert len(parsing_preds) == num_samples
     mIoU = compute_mean_ioU_4classes(parsing_preds, scales, centers, len(LIP), args.data_dir, input_size)
     print(mIoU)
     return
-
 
 if __name__ == '__main__':
     main()
