@@ -131,7 +131,7 @@ def main():
         checkpoint = torch.load(restore_from, map_location='cpu')
 
         ###########################################################
-        #Load checkpoint & Fit model parameters
+        #Load checkpoint & Fit model parameters - Resume
         new_params = model.state_dict().copy()
 
         model_keys = [name for name, _ in model.named_parameters()]
@@ -139,7 +139,7 @@ def main():
 
         for i in weight_file:
             if i not in model_keys: continue
-            if 'module' in i:
+            if 'module' in i:   #'module.'이 추가됨을 확인
                 wo_i = i[7:]
             new_params[wo_i] = checkpoint[i]
 
