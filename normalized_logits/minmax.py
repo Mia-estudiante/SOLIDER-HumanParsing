@@ -99,7 +99,7 @@ print(image_names)
 one_logit = np.load(LOGIT_PATH)
 one_logit_ = one_logit[1:, ]
 
-#Step2. 상/하의 부분에 관해 추출한 mean, std 값을 통해 normalize 진행
+#Step2. 상/하의 부분에 관해 추출한 min, max 값을 통해 normalize 진행
 UPPER_MEAN, UPPER_STD, UPPER_MAX, UPPER_MIN = np.mean(one_logit_[:,:,:,[5,7]]), np.std(one_logit_[:,:,:,[5,7]]), \
                                                 np.max(one_logit_[:,:,:,[5,7]]), np.min(one_logit_[:,:,:,[5,7]])
 BOTTOM_MEAN, BOTTOM_STD, BOTTOM_MAX, BOTTOM_MIN = np.mean(one_logit_[:,:,:,[9, 12]]), np.std(one_logit_[:,:,:,[9, 12]]), \
