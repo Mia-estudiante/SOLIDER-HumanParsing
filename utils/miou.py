@@ -110,8 +110,8 @@ def compute_mean_ioU(preds, scales, centers, num_classes, datadir, input_size=[4
 #Map pixels related to classes
 def make_dicmap(data):
     # dic2clt = {'upper':2, 'bottom':1, 'dress':3}
-    # dic2clt = {'upper':3, 'bottom':5, 'dress':200} #DukeMTMC
-    dic2clt = {'upper':1, 'bottom':2, 'dress':3} #LIP
+    # dic2clt = {'upper':3, 'bottom':5, 'dress':200}    #DukeMTMC
+    dic2clt = {'upper':1, 'bottom':2, 'dress':3}        #LIP, Market1501, Anyang
 
     dic_parset = {
         'ppss': {'upper':[3], 'bottom':[4]},  
